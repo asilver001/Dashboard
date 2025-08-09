@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Interactive Dashboard</title>
+  <!-- React + ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Recharts (UMD) -->
+  <script crossorigin src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+  <!-- SortableJS for drag & drop (no build tools needed) -->
+  <script src="https://unpkg.com/sortablejs@1.15.2/modular/sortable.core.esm.js" type="module"></script>
+  <style>
+    :root { --bg:#0b1220; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#60a5fa; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --border:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#0f172a 0%,#0b1220 100%);color:var(--text)}
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    h1{font-size:20px;margin:0}
+    .btn{background:#1f2937;color:#e5e7eb;border:1px solid var(--border);padding:10px 14px;border-radius:12px;cursor:pointer}
+    .grid{display:grid;gap:16px}
+    .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .charts{grid-template-columns:2fr 1fr}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}
+    .kpi-title{color:var(--muted);font-size:12px;text-transform:uppercase}
+    .kpi-value{font-size:26px;font-weight:700;margin-top:6px}
+    .filters{display:flex;gap:10px;align-items:center}
+    .input{background:#0b1220;border:1px solid var(--border);color:var(--text);border-radius:12px;padding:10px 12px;min-width:220px}
+    .board{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .col{background:#0b1220;border:1px dashed #233044;padding:10px;border-radius:14px;min-height:120px}
+    .col h3{margin:0 0 8px 4px;font-size:14px;color:#cbd5e1}
+    .task{background:#0f172a;border:1px solid #243041;border-radius:12px;padding:10px;margin:8px 0}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid #243041;color:#cbd5e1}
+    .row{display:flex;gap:8px;align-items:center}
+    .muted{color:var(--muted);font-size:12px}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{border-top:1px solid var(--border);padding:10px;text-align:left}
+    .pill{padding:2px 8px;border-radius:999px;font-size:12px}
+    .pill.done{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.4)}
+    .pill.progress{background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.4)}
+    .pill.review{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4)}
+    .pill.backlog{background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.4)}
+    @media (max-width:1024px){.kpis{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}.board{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:640px){.kpis,.board{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="module">
+    import Sortable from 'https://unpkg.com/sortablejs@1.15.2/modular/sortable.core.esm.js';
+    const { useState, useEffect, useMemo } = React;
+    const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = Recharts;
+
+    const STATUSES = ["Backlog","In Progress","Review","Done"];
+    const PRIORITIES = ["Low","Medium","High"];
+    const COLORS = ["#60a5fa","#22c55e","#f59e0b","#ef4444","#a78bfa"]; // for charts
+
+    const demo = [
+      {id: id(), title:"Create wireframes", owner:"Alice", status:"Backlog", priority:"High", due:"2025-08-20"},
+      {id: id(), title:"Connect auth", owner:"Ben", status:"In Progress", priority:"Medium", due:"2025-08-18"},
+      {id: id(), title:"QA pass", owner:"Ben", status:"Review", priority:"Medium", due:"2025-08-16"},
+      {id: id(), title:"Billing integration", owner:"Eve", status:"In Progress", priority:"High", due:"2025-08-14"},
+      {id: id(), title:"Launch v1", owner:"Team", status:"Done", priority:"High", due:"2025-08-10"}
+    ];
+
+    function id(){ return Math.random().toString(36).slice(2,9); }
+
+    function load(){ try{ return JSON.parse(localStorage.getItem('tasks')||'[]'); }catch(e){ return [] } }
+    function save(tasks){ localStorage.setItem('tasks', JSON.stringify(tasks)); }
+
+    function App(){
+      const [tasks, setTasks] = useState(()=>{ const s=load(); return s.length? s: demo; });
+      const [q, setQ] = useState('');
+      const [segment, setSegment] = useState('All');
+
+      useEffect(()=>save(tasks),[tasks]);
+
+      const owners = Array.from(new Set(tasks.map(t=>t.owner)));
+
+      const filtered = useMemo(()=>{
+        return tasks.filter(t=>{
+          const matchQ = t.title.toLowerCase().includes(q.toLowerCase());
+          const matchSeg = segment==='All' || [t.owner,t.status,t.priority].includes(segment);
+          return matchQ && matchSeg;
+        });
+      },[tasks,q,segment]);
+
+      const metrics = useMemo(()=>{
+        const total = tasks.length;
+        const done = tasks.filter(t=>t.status==='Done').length;
+        const progress = tasks.filter(t=>t.status==='In Progress').length;
+        const atRisk = tasks.filter(t=> t.priority==='High' && new Date(t.due)<new Date()).length;
+        return {total,done,progress,atRisk};
+      },[tasks]);
+
+      const revenue = Array.from({length:12}).map((_,i)=>({name:`M${i+1}`, revenue: 40000+i*2500+(i%2?7000:2000), cost: 24000+i*1700+(i%3?2000:5000)}));
+      const pieData = PRIORITIES.map(p=>({name:p, value: tasks.filter(t=>t.priority===p).length }));
+
+      function createTask(){
+        const title = prompt('Task title'); if(!title) return;
+        const owner = prompt('Owner (e.g. Alice)') || 'Unassigned';
+        const status = prompt('Status (Backlog, In Progress, Review, Done)') || 'Backlog';
+        const priority = prompt('Priority (Low, Medium, High)') || 'Medium';
+        const due = prompt('Due date (YYYY-MM-DD)', new Date(Date.now()+7*864e5).toISOString().slice(0,10)) || '';
+        setTasks(ts=>[{id:id(), title, owner, status, priority, due}, ...ts]);
+      }
+
+      function mountSortable(colId, status){
+        const el = document.getElementById(colId);
+        if(!el || el._sortableMounted) return; // avoid double
+        el._sortableMounted = true;
+        new Sortable(el, {
+          group: 'board',
+          animation: 150,
+          ghostClass: 'drag-ghost',
+          onAdd(evt){
+            const tid = evt.item.getAttribute('data-id');
+            setTasks(ts=> ts.map(t=> t.id===tid? {...t, status}: t));
+          },
+          onUpdate(){ /* order changes ignored for simplicity */ }
+        });
+      }
+
+      useEffect(()=>{
+        // mount after each render to ensure columns exist
+        STATUSES.forEach(s=> mountSortable('col-'+s.replace(/\s/g,'-'), s));
+      });
+
+      return (
+        React.createElement('div',{className:'wrap'},
+          React.createElement('div',{className:'top'},[
+            React.createElement('h1',{key:1},'Team Workspace — Standalone'),
+            React.createElement('button',{key:2,className:'btn',onClick:createTask},'+ New Task')
+          ]),
+
+          // KPIs
+          React.createElement('div',{className:'grid kpis'},[
+            kpi('Done', metrics.done),
+            kpi('In Progress', metrics.progress),
+            kpi('At Risk', metrics.atRisk),
+            kpi('Total', metrics.total)
+          ]),
+
+          // Filters
+          React.createElement('div',{className:'card filters',style:{marginTop:16}},[
+            React.createElement('input',{key:1,className:'input',placeholder:'Search tasks',value:q,onInput:e=>setQ(e.target.value)}),
+            React.createElement('select',{key:2,className:'input',style:{minWidth:160}, value:segment,onChange:e=>setSegment(e.target.value)},[
+              opt('All'),
+              ...STATUSES.map(s=>opt(s)),
+              ...owners.map(o=>opt(o)),
+              ...PRIORITIES.map(p=>opt(p))
+            ])
+          ]),
+
+          // Charts
+          React.createElement('div',{className:'grid charts',style:{marginTop:16}},[
+            React.createElement('div',{className:'card',key:1},[
+              React.createElement('div',{className:'muted',style:{marginBottom:8}},'Revenue vs Cost'),
+              React.createElement('div',{style:{height:260}},
+                React.createElement(ResponsiveContainer,{width:'100%',height:'100%'},
+                  React.createElement(AreaChart,{data:revenue, margin:{left:10,right:10,top:10,bottom:0}},[
+                    React.createElement(CartesianGrid,{key:1,strokeDasharray:'3 3'}),
+                    React.createElement(XAxis,{key:2,dataKey:'name'}),
+                    React.createElement(YAxis,{key:3}),
+                    React.createElement(Tooltip,{key:4}),
+                    React.createElement(Area,{key:5,type:'monotone',dataKey:'revenue',stroke:'#60a5fa',fill:'rgba(96,165,250,.25)'}),
+                    React.createElement(Area,{key:6,type:'monotone',dataKey:'cost',stroke:'#ef4444',fill:'rgba(239,68,68,.25)'})
+                  ])
+                )
+              )
+            ]),
+            React.createElement('div',{className:'card',key:2},[
+              React.createElement('div',{className:'muted',style:{marginBottom:8}},'Tasks by Priority'),
+              React.createElement('div',{style:{height:260}},
+                React.createElement(ResponsiveContainer,{width:'100%',height:'100%'},
+                  React.createElement(PieChart,null,
+                    React.createElement(Pie,{data:pieData, dataKey:'value', nameKey:'name', innerRadius:50, outerRadius:80, label:true},
+                      pieData.map((_,i)=> React.createElement(Cell,{key:i, fill:COLORS[i%COLORS.length]}))
+                    ),
+                    React.createElement(Legend,null),
+                    React.createElement(Tooltip,null)
+                  )
+                )
+              )
+            ])
+          ]),
+
+          // Board
+          React.createElement('div',{className:'grid board',style:{marginTop:16}},
+            STATUSES.map(s=> React.createElement('div',{key:s,className:'card'},[
+              React.createElement('h3',{key:1}, s),
+              React.createElement('div',{key:2,id:'col-'+s.replace(/\s/g,'-'), className:'col'},
+                filtered.filter(t=>t.status===s).map(t=> taskCard(t))
+              )
+            ]))
+          ),
+
+          // Table
+          React.createElement('div',{className:'card',style:{marginTop:16}},[
+            React.createElement('div',{className:'muted',style:{marginBottom:8}},'Table view'),
+            React.createElement('div',{style:{overflowX:'auto'}},
+              React.createElement('table',{className:'table'},[
+                React.createElement('thead',null, React.createElement('tr',null,[th('Title'),th('Owner'),th('Status'),th('Priority'),th('Due')])),
+                React.createElement('tbody',null,
+                  filtered.map(t=> React.createElement('tr',{key:t.id},[
+                    td(t.title), td(t.owner), td(pill(t.status)), td(t.priority), td(t.due)
+                  ]))
+                )
+              ])
+            )
+          ])
+        )
+      );
+
+      function taskCard(t){
+        return React.createElement('div',{className:'task',key:t.id, 'data-id':t.id, draggable:true},[
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center'}},[
+            React.createElement('div',{style:{fontWeight:600}}, t.title),
+            React.createElement('span',{className:'tag'}, t.priority)
+          ]),
+          React.createElement('div',{className:'row muted',style:{marginTop:6}},[
+            React.createElement('span',null, t.owner),
+            React.createElement('span',null,'•'),
+            React.createElement('span',null, t.due)
+          ])
+        ]);
+      }
+
+      function kpi(title,val){
+        return React.createElement('div',{className:'card',key:title},[
+          React.createElement('div',{className:'kpi-title'}, title),
+          React.createElement('div',{className:'kpi-value'}, String(val))
+        ]);
+      }
+
+      function pill(status){
+        const cls = status==='Done'? 'pill done': status==='In Progress'? 'pill progress': status==='Review'? 'pill review': 'pill backlog';
+        return React.createElement('span',{className:cls}, status);
+      }
+
+      function opt(v){ return React.createElement('option',{key:v,value:v},v); }
+      function th(v){ return React.createElement('th',{key:v},v); }
+      function td(v){ return React.createElement('td',{key:Math.random()},v); }
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
