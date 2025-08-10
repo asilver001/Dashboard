@@ -4,31 +4,65 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Studio Board</title>
+    <script src="https://unpkg.com/react/18.2.0/dist/react.development.js"></script>
+    <script src="https://unpkg.com/reactdom/18.2.0/dist/reactdom.development.js"></script>
+    <script src="https://unpkg.com/recharts/2.2.0/dist/recharts.app.js"></script>
+    <script src="https://unpkg.com/sortablejs/1.15.0/Sortable.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f8f9fa;
-            text-align: center;
-        }
-        header {
-            background-color: #343a40;
-            color: white;
-            padding: 20px;
-            font-size: 2em;
-        }
-        main {
-            padding: 20px;
-        }
+        body { font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
+        header { background-color: #343a40; color: white; padding: 20px; font-size: 2em; text-align: center; }
+        #root { padding: 20px; max-width: 900px; margin: 0 auto; }
+        .package { background: #fff; border-radius: 6px; padding: 10px; margin-bottom: 10px; width: 100%; }
+        .package-name { font-weight: bold; margin-bottom: 5px; }
+        .progress-bar { height: 20px; background: #e5e5e5; border-radius: 10px; overflow: hidden; position: relative; }
+        .progress-fill { background: #343a40; border-radius: 10px; text-align: center; color: white; font-size: 13px; position: absolute; top: 0; left: 0; height: 20px; }
+        .subtasks { margin-top: 10px; padding-left: 20px; }
+        .subtask { margin-bottom: 5px; }
+        .subtask-input { width: 60px; margin-left: 10px; }
     </style>
 </head>
 <body>
     <header>Studio Board</header>
     <main>
-        <!-- GPT:BODY-START @ -->
-        <p>Your interactive dashboard will appear here.</p>
-        <!-- GPT:BODY-END @-->
+        <!-- GPT:BODY-START -->
+        <div id="root"></div>
+        <!-- GPT:BODY-END -->
     </main>
+    <script>
+        const { useState, useEffect } = React;
+        const { RadialBarChart } = Recharts;
+        const initialPackages = [
+            { id: 1, name: "Chemistry", subtasks: [] },
+            { id: 2, name: "Subsystems", subtasks: [] },
+            { id: 3, name: "Testing", subtasks: [] }
+        ];
+        function Package({ package, updatePackage }) {
+            const progress = package.subtasks.length === 0 ? 0 : package.subtasks.reduce((p, s) => p + (Number(s.percentage) || 0), 0) / package.subtasks.length;
+            return React.createElement("div", { className: "package" },
+                React.createElement("div", { className: "package-name"}, package.name + " - " + progress + "%"),
+                React.createElement("div", { className: "progress-bar" },
+                    React.createElement("div", { className: "progress-fill", style: { width: progress + "%" } }, progress + "%"),
+                React.createElement("div", { className: "subtasks" }, package.subtasks.map((st, index) => React.createElement("div", { className: "subtask", key: index },
+                    React.createElement("input", { type: "text", value: st.name, onChange: e => {
+                        const updatedSubtasks = [...package.subtasks];
+                        updatedSubsaks[index] = { ...st, name: e.target.value };
+                        updatePackage({ ...package, subtasks: updatedSubtasks });
+                    } }), React.createElement("span", null, " - "), React.createElement("input", { type: "number", className: "subtask-input", value: st.percentage || 0, onChange: e => {
+                        const updatedSubtasks = [...package.subtasks];
+                        updatedSubtasks[index] = { ...st, percentage: e.target.value };
+                        updatePackage({ ...package, subtasks: updatedSubtasks });
+                    } })))), React.createElement("button", { onClick: () => {
+                    const updatedSubtasks = [...package.subtasks, { name: "Subtask " + (package.subtasks.length + 1), percentage: 0 }];
+                    updatePackage({ ...package, subtasks: updatedSubtasks });
+                } }, "Add Subtask"));
+}
+        function App() {
+            const [packages, setPackages] = useState(() => JSON.parse(localStorage.getItem("packages")) || initialPackages);
+            useEffect(() => {localStorage.setItem("packages", JSON.stringify(packes))}, [packages]);
+            const updatePackage = (updated) => {setPackages(prev => prev.map(0> ws => ws.id === updated.id ? updated : ws))};
+            const overall = packages.length === 0 ?"0": (packages.reduce((p, ws) => p + (ws.subtasks.reduce((a, st) => a + (Number(st.percentage) || 0), 0) / ws.subtasks.length), 0) [/ packages.length]);
+            return React.createElement("\"div\", null, Packages.pap(!p => Package({ package: p, updatePackage })), React.createElement("RadialBarChart", { width: 400, height: 200, data: [{ name: "Overall", x: "100", y: 100, fill: "#343a40", value: overall }], innerRadius { top: 100, left: 100 }, centerContent: true, startAngle: -90, endAngle: 90, background: #fff });}
+        ReactDOM.render(/*  Call app */React.createElement(App), document.getElementById("root"));
+    </script>
 </body>
 </html>
